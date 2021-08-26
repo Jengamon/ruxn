@@ -3,6 +3,7 @@ use std::cell::{Cell, RefCell};
 use thiserror::Error;
 
 mod ops;
+mod devices;
 
 const MODE_RETURN: u8 = 0x40;
 const MODE_KEEP: u8 = 0x80;
@@ -349,8 +350,32 @@ impl Uxn {
         }
     }
 
+    pub fn disassemble_name(instr: u8) -> String {
+        let op_names = [
+            "LIT","INC","POP","DUP","NIP","SWP","OVR","ROT",
+            "EQU","NEQ","GTH","LTH","JMP","JNZ","JSR","STH", 
+            "PEK","POK","LDR","STR","LDA","STA","DEI","DEO", 
+            "ADD","SUB","MUL","DIV","AND","ORA","EOR","SFT", 
+        ];
+
+        fn find_flags(instr: u8) -> String {
+            let mut flags = "".to_string();
+            if (instr & 0x20) != 0 {
+                flags += "2";
+            }
+            if (instr & MODE_KEEP) != 0 {
+                flags += "k";
+            }
+            if(instr & MODE_RETURN) != 0 {
+                flags += "r";
+            }
+            flags
+        }
+
+        format!("{}{}", op_names[(instr&0x1f) as usize], find_flags(instr))
+    }
+
     pub fn eval(&mut self, vec: u16) -> Result<isize, UxnError> {
-        eprintln!("=== MEMORY ===\n{:02x?}", self.ram.data.get());
         let mut instr;
         // vec == 0 means that the code is pointing to 0x00 which is illegal ig
         // self.dev[0].data[0xf] is accessing the last piece of data from the first device
@@ -381,28 +406,9 @@ impl Uxn {
             } else {
                 KeepMode::NoKeep
             };
-            let OP_NAMES = [
-                "LIT","INC","POP","DUP","NIP","SWP","OVR","ROT",
-                "EQU","NEQ","GTH","LTH","JMP","JNZ","JSR","STH", 
-                "PEK","POK","LDR","STR","LDA","STA","DEI","DEO", 
-                "ADD","SUB","MUL","DIV","AND","ORA","EOR","SFT", 
-            ];
+            
 
-            fn find_flags(instr: u8) -> String {
-                let mut flags = "".to_string();
-                if (instr & 0x20) != 0 {
-                    flags += "2";
-                }
-                if (instr & MODE_KEEP) != 0 {
-                    flags += "k";
-                }
-                if(instr & MODE_RETURN) != 0 {
-                    flags += "r";
-                }
-                flags
-            }
-
-            eprintln!("{:02x} {}{} {:02x?} {:02x?}", instr, OP_NAMES[(instr&0x1f) as usize], find_flags(instr),
+            eprintln!("{:02x} {} {:02x?} {:02x?}", instr, Uxn::disassemble_name(instr),
                 &src.data.get()[..src.ptr.get() as usize], &dst.data.get()[..dst.ptr.get() as usize]);
             (self.ops[(instr & 0x3f) as usize])(self, &mut src, &mut dst, keep);
             ram = self.ram.data.get();
@@ -433,26 +439,11 @@ fn load<P: AsRef<Path>>(uxn: &mut Uxn, path: P) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run(uxn: &mut Uxn) -> Result<(), UxnError> {
-    uxn.eval(PAGE_PROGRAM)?;
+fn run(uxn: &mut Uxn) -> Result<isize, UxnError> {
+    let ret = uxn.eval(PAGE_PROGRAM)?;
     // TODO FIgure out what the hell this code means
     //while((uxn.dev[0].dat[0xf] != 0) && )
-    Ok(())
-}
-
-fn inspect(wst: &Stack) {
-    println!("\n");
-    for y in 0..0x08 {
-        for x in 0..0x08 {
-            let p = y * 0x08 + x;
-            eprintln!("{}", if p == wst.ptr.get() {
-                format!("[{:02x}]", wst.data.get()[p as usize])
-            } else {
-                format!(" {:02x} ", wst.data.get()[p as usize])
-            });
-        }
-        eprintln!();
-    }
+    Ok(ret)
 }
 
 fn main() -> anyhow::Result<()> {
@@ -460,23 +451,8 @@ fn main() -> anyhow::Result<()> {
     // TODO Take an argument to a uxn input file (an assembled script)
     let mut uxn = Uxn::new();
     load(&mut uxn, "./left.rom")?;
-    uxn.dev[0].install("system", |uxn, dev, b0, w| {
-        if w == 0 {
-            match b0 {
-                0x2 => dev.data[0x2] = uxn.wst.ptr.get(),
-                0x3 => dev.data[0x3] = uxn.rst.ptr.get(),
-                _ => {}
-            }
-        } else {
-            match b0 {
-                0x2 => uxn.wst.ptr.set(dev.data[0x2]),
-                0x3 => uxn.rst.ptr.set(dev.data[0x3]),
-                0xe => inspect(&uxn.wst),
-                0xf => uxn.ram.ptr = 0x0000,
-                _ => {}
-            }
-        }
-    });
-    run(&mut uxn)?;
+    uxn.dev[0].install("system", devices::system_talk);
+    let ret = run(&mut uxn)?;
+    println!("==> {}", ret);
     Ok(())
 }

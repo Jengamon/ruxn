@@ -138,7 +138,10 @@ pub fn op_dei(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let a = src.pop8(keep);
     let mut dev = uxn.dev[(a >> 4) as usize].clone();
     // Uses unwrap, can crash here
-    src.push8(dev.devpeek8(uxn, a).unwrap());
+    match dev.devpeek8(uxn, a) {
+        Ok(n) => src.push8(n),
+        Err(e) => eprintln!("Device Error: {}", e)
+    };
     uxn.dev[(a >> 4) as usize] = dev;
 }
 
@@ -146,27 +149,29 @@ pub fn op_deo(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let a = src.pop8(keep);
     let b = src.pop8(keep);
     let mut dev = uxn.dev[(a >> 4) as usize].clone();
-    // Uses unwrap, can crash here
-    dev.devpoke8(uxn, a, b).unwrap();
+    match dev.devpoke8(uxn, a, b) {
+        Ok(()) => (),
+        Err(e) => eprintln!("Device Error: {}", e)
+    };
     uxn.dev[(a >> 4) as usize] = dev;
 }
 /* Arithmetic */
 pub fn op_add(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let a = src.pop8(keep);
     let b = src.pop8(keep);
-    src.push8(b + a);
+    src.push8(b.wrapping_add(a));
 }
 
 pub fn op_sub(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let a = src.pop8(keep);
     let b = src.pop8(keep);
-    src.push8(b - a);
+    src.push8(b.wrapping_sub(a));
 }
 
 pub fn op_mul(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let a = src.pop8(keep);
     let b = src.pop8(keep);
-    src.push8(b * a);
+    src.push8(b.wrapping_mul(a));
 }
 
 pub fn op_div(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
@@ -176,7 +181,7 @@ pub fn op_div(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
         src.error = 3;
         a = 1;
     }
-    src.push8(b / a);
+    src.push8(b.wrapping_div(a));
 }
 
 pub fn op_and(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
@@ -334,8 +339,10 @@ pub fn op_sta16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode)
 pub fn op_dei16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let a = src.pop8(keep);
     let mut dev = uxn.dev[(a >> 4) as usize].clone();
-    // Uses unwrap, can crash here
-    src.push16(dev.devpeek16(uxn, a).unwrap());
+    match dev.devpeek16(uxn, a) {
+        Ok(n) => src.push16(n),
+        Err(e) => eprintln!("Device Error: {}", e)
+    };
     uxn.dev[(a >> 4) as usize] = dev;
 }
 
@@ -343,8 +350,62 @@ pub fn op_deo16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode)
     let a = src.pop8(keep);
     let b = src.pop16(keep);
     let mut dev = uxn.dev[(a >> 4) as usize].clone();
-    // Uses unwrap, can crash here
-    dev.devpoke16(uxn, a, b).unwrap();
+    match dev.devpoke16(uxn, a, b) {
+        Ok(()) => (),
+        Err(e) => eprintln!("Device Error: {}", e)
+    };
     uxn.dev[(a >> 4) as usize] = dev;
 }
+
 /* Arithmetic 16bit */
+pub fn op_add16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
+    let a = src.pop16(keep);
+    let b = src.pop16(keep);
+    src.push16(b.wrapping_add(a));
+}
+
+pub fn op_sub16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
+    let a = src.pop16(keep);
+    let b = src.pop16(keep);
+    src.push16(b.wrapping_sub(a));
+}
+
+pub fn op_mul16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
+    let a = src.pop16(keep);
+    let b = src.pop16(keep);
+    src.push16(b.wrapping_mul(a));
+}
+
+pub fn op_div16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
+    let mut a = src.pop16(keep);
+    let b = src.pop16(keep);
+    if a == 0 {
+        src.error = 3;
+        a = 1;
+    }
+    src.push16(b.wrapping_div(a));
+}
+
+pub fn op_and16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
+    let a = src.pop16(keep);
+    let b = src.pop16(keep);
+    src.push16(b & a);
+}
+
+pub fn op_ora16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
+    let a = src.pop16(keep);
+    let b = src.pop16(keep);
+    src.push16(b | a);
+}
+
+pub fn op_eor16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
+    let a = src.pop16(keep);
+    let b = src.pop16(keep);
+    src.push16(b ^ a);
+}
+
+pub fn op_sft16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
+    let a = src.pop8(keep);
+    let b = src.pop16(keep);
+    src.push16(b >> (a & 0x07) << ((a & 0x70) >> 4));
+}

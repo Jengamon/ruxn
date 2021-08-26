@@ -16,16 +16,16 @@ pub enum KeepMode {
     NoKeep,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Stack {
     /// The current location in the stack
-    ptr: u8,
+    ptr: Rc<Cell<u8>>,
     /// The last allocated position in the stack
-    kptr: u8,
+    kptr: Rc<Cell<u8>>,
     /// An error code
     error: u8,
     /// Stack data
-    data: [u8; 256],
+    data: Rc<Cell<[u8; 256]>>,
 }
 
 #[derive(Debug, Clone)]
@@ -81,19 +81,21 @@ impl std::fmt::Debug for Uxn {
 impl Stack {
     fn new() -> Stack {
         Stack {
-            ptr: 0,
-            kptr: 0,
+            ptr: Rc::new(Cell::new(0)),
+            kptr: Rc::new(Cell::new(0)),
             error:0,
-            data: [0; 256]
+            data: Rc::new(Cell::new([0; 256]))
         }
     }
 
     pub fn push8(&mut self, a: u8) {
-        if self.ptr == 0xff {
+        if self.ptr.get() == 0xff {
             self.error = 2;
         } else {
-            self.data[self.ptr as usize] = a;
-            self.ptr += 1;
+            let mut data = self.data.get();
+            data[self.ptr.get() as usize] = a;
+            self.ptr.set(self.ptr.get() + 1);
+            self.data.set(data);
         }
         
     }
@@ -101,21 +103,27 @@ impl Stack {
     pub fn pop8(&mut self, keep: KeepMode) -> u8 {
         match keep {
             KeepMode::Keep => {
-                if self.kptr == 0 {
+                if self.kptr.get() == 0 {
                     self.error = 1;
                     0
                 } else {
-                    self.kptr -= 1;
-                    self.data[self.kptr as usize]
+                    self.kptr.set(self.kptr.get() - 1);
+                    let data = self.data.get();
+                    let ret = data[self.kptr.get() as usize];
+                    self.data.set(data);
+                    ret
                 }
             },
             KeepMode::NoKeep => {
-                if self.ptr == 0 {
+                if self.ptr.get() == 0 {
                     self.error = 1;
                     0
                 } else {
-                    self.ptr -= 1;
-                    self.data[self.ptr as usize]
+                    self.ptr.set(self.ptr.get() - 1);
+                    let data = self.data.get();
+                    let ret = data[self.ptr.get() as usize];
+                    self.data.set(data);
+                    ret
                 }
             }
         }
@@ -165,7 +173,7 @@ impl Memory {
 
 #[derive(Error, Debug)]
 pub enum DeviceError {
-    #[error("No device exists at address {0}")]
+    #[error("No device exists at address {0:02x}")]
     NoDevice(u8),
 }
 
@@ -328,6 +336,15 @@ impl Uxn {
                 ops::op_sta16,
                 ops::op_dei16,
                 ops::op_deo16,
+
+                ops::op_add16,
+                ops::op_sub16,
+                ops::op_mul16,
+                ops::op_div16,
+                ops::op_and16,
+                ops::op_ora16,
+                ops::op_eor16,
+                ops::op_sft16,
             ]
         }
     }
@@ -342,33 +359,33 @@ impl Uxn {
             return Ok(0)
         }
         self.ram.ptr = vec;
-        if self.wst.ptr > 0xf8 {
-            self.wst.ptr = 0xf8;
+        if self.wst.ptr.get() > 0xf8 {
+            self.wst.ptr.set(0xf8);
         }
         let mut ram = self.ram.data.get();
         while ram[self.ram.ptr as usize] != 0 {
             instr = ram[self.ram.ptr as usize];
             self.ram.ptr += 1;
             /* Return Mode */
-            let (ref mut src, ref mut dst) = {
+            let (mut src, mut dst) = {
                 if (instr & MODE_RETURN) != 0 {
-                    (self.rst, self.wst)
+                    (self.rst.clone(), self.wst.clone())
                 } else {
-                    (self.wst, self.rst)
+                    (self.wst.clone(), self.rst.clone())
                 }
             };
             /* Keep Mode */
             let keep = if (instr & MODE_KEEP) != 0 {
-                src.kptr = src.ptr;
+                src.kptr.set(src.ptr.get());
                 KeepMode::Keep
             } else {
                 KeepMode::NoKeep
             };
             let OP_NAMES = [
-                "lit","inc","pop","dup","nip","swp","ovr","rot",
-                "equ","neq","gth","lth","jmp","jnz","jsr","sth", 
-                "pek","pok","ldr","str","lda","sta","dei","deo", 
-                "add","sub","mul","div","and","ora","eor","sft", 
+                "LIT","INC","POP","DUP","NIP","SWP","OVR","ROT",
+                "EQU","NEQ","GTH","LTH","JMP","JNZ","JSR","STH", 
+                "PEK","POK","LDR","STR","LDA","STA","DEI","DEO", 
+                "ADD","SUB","MUL","DIV","AND","ORA","EOR","SFT", 
             ];
 
             fn find_flags(instr: u8) -> String {
@@ -385,23 +402,15 @@ impl Uxn {
                 flags
             }
 
-            eprintln!("{:02x} {}{} {:02x?} {:02x?}", instr, OP_NAMES[(instr&0x1f) as usize], find_flags(instr),&src.data[..src.ptr as usize], &dst.data[..dst.ptr as usize]);
-            (self.ops[(instr & 0x3f) as usize])(self, src, dst, keep);
+            eprintln!("{:02x} {}{} {:02x?} {:02x?}", instr, OP_NAMES[(instr&0x1f) as usize], find_flags(instr),
+                &src.data.get()[..src.ptr.get() as usize], &dst.data.get()[..dst.ptr.get() as usize]);
+            (self.ops[(instr & 0x3f) as usize])(self, &mut src, &mut dst, keep);
             ram = self.ram.data.get();
             if self.wst.error != 0 {
                 return Err(UxnError::Halted("Working-stack", ERRORS[(self.wst.error - 1) as usize], instr.into(), self.ram.ptr));
             }
             if self.rst.error != 0 {
                 return Err(UxnError::Halted("Return-stack", ERRORS[(self.rst.error - 1) as usize], instr.into(), self.ram.ptr));
-            }
-
-            // Put them stacks back
-            if (instr & MODE_RETURN) != 0 {
-                self.rst = *src;
-                self.wst = *dst;
-            } else {
-                self.wst = *src;
-                self.rst = *dst;
             }
         }
         Ok(1)
@@ -431,6 +440,21 @@ fn run(uxn: &mut Uxn) -> Result<(), UxnError> {
     Ok(())
 }
 
+fn inspect(wst: &Stack) {
+    println!("\n");
+    for y in 0..0x08 {
+        for x in 0..0x08 {
+            let p = y * 0x08 + x;
+            eprintln!("{}", if p == wst.ptr.get() {
+                format!("[{:02x}]", wst.data.get()[p as usize])
+            } else {
+                format!(" {:02x} ", wst.data.get()[p as usize])
+            });
+        }
+        eprintln!();
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     // Do setup
     // TODO Take an argument to a uxn input file (an assembled script)
@@ -439,13 +463,18 @@ fn main() -> anyhow::Result<()> {
     uxn.dev[0].install("system", |uxn, dev, b0, w| {
         if w == 0 {
             match b0 {
-                0x2 => {
-                    dev.data[0x2] = uxn.wst.ptr;
-                    dev.data[0x3] = uxn.rst.ptr;
-                }
+                0x2 => dev.data[0x2] = uxn.wst.ptr.get(),
+                0x3 => dev.data[0x3] = uxn.rst.ptr.get(),
+                _ => {}
             }
         } else {
-
+            match b0 {
+                0x2 => uxn.wst.ptr.set(dev.data[0x2]),
+                0x3 => uxn.rst.ptr.set(dev.data[0x3]),
+                0xe => inspect(&uxn.wst),
+                0xf => uxn.ram.ptr = 0x0000,
+                _ => {}
+            }
         }
     });
     run(&mut uxn)?;

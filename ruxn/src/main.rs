@@ -353,7 +353,7 @@ impl Uxn {
     pub fn disassemble_name(instr: u8) -> String {
         let op_names = [
             "LIT","INC","POP","DUP","NIP","SWP","OVR","ROT",
-            "EQU","NEQ","GTH","LTH","JMP","JNZ","JSR","STH", 
+            "EQU","NEQ","GTH","LTH","JMP","JCN","JSR","STH", 
             "PEK","POK","LDR","STR","LDA","STA","DEI","DEO", 
             "ADD","SUB","MUL","DIV","AND","ORA","EOR","SFT", 
         ];
@@ -408,7 +408,7 @@ impl Uxn {
             };
             
 
-            eprintln!("{:02x} {} {:02x?} {:02x?}", instr, Uxn::disassemble_name(instr),
+            eprintln!("[{:04x}] {:02x} {} {:02x?} {:02x?}", self.ram.ptr - 1, instr, Uxn::disassemble_name(instr),
                 &src.data.get()[..src.ptr.get() as usize], &dst.data.get()[..dst.ptr.get() as usize]);
             (self.ops[(instr & 0x3f) as usize])(self, &mut src, &mut dst, keep);
             ram = self.ram.data.get();
@@ -446,12 +446,19 @@ fn run(uxn: &mut Uxn) -> Result<isize, UxnError> {
     Ok(ret)
 }
 
+use std::env;
+
 fn main() -> anyhow::Result<()> {
     // Do setup
-    // TODO Take an argument to a uxn input file (an assembled script)
+    let args: Vec<_> = env::args().collect();
+    if args.len() < 2 {
+        panic!("usage: output.rom");
+    }
+
     let mut uxn = Uxn::new();
-    load(&mut uxn, "./left.rom")?;
+    load(&mut uxn, &args[1])?;
     uxn.dev[0].install("system", devices::system_talk);
+    uxn.dev[1].install("console", devices::console_talk);
     let ret = run(&mut uxn)?;
     println!("==> {}", ret);
     Ok(())

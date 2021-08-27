@@ -32,3 +32,9 @@ pub fn system_talk(uxn: &mut Uxn, dev: &mut Device, b0: u8, w: u8) {
         }
     }
 }
+
+pub fn console_talk(_uxn: &mut Uxn, dev: &mut Device, b0: u8, w: u8) {
+    if w != 0 && b0 > 0x07 {
+        print!("{}", dev.data[b0 as usize] as char);
+    }
+}

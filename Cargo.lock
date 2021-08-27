@@ -27,6 +27,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rutal"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "thiserror",
+]
+
+[[package]]
 name = "ruxn"
 version = "0.1.0"
 dependencies = [

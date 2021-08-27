@@ -15,7 +15,7 @@ pub fn op_lit(uxn: &mut Uxn, src: &mut Stack, _dst: &mut Stack, _keep: KeepMode)
 
 pub fn op_inc(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let a = src.pop8(keep);
-    src.push8(a + 1);
+    src.push8(a.wrapping_add(1));
 }
 
 pub fn op_pop(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
@@ -80,20 +80,20 @@ pub fn op_lth(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
 
 pub fn op_jmp(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let a = src.pop8(keep);
-    uxn.ram.ptr += a as u16;
+    uxn.ram.ptr = (uxn.ram.ptr as i16 + a as i8 as i16) as u16;
 }
 
 pub fn op_jnz(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let a = src.pop8(keep);
-    if src.pop8(keep) == 0 {
-        uxn.ram.ptr += a as u16;
+    if src.pop8(keep) != 0 {
+        uxn.ram.ptr = (uxn.ram.ptr as i16 + a as i8 as i16) as u16;
     }
 }
 
 pub fn op_jsr(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let a = src.pop8(keep);
     dst.push16(uxn.ram.ptr);
-    uxn.ram.ptr += a as u16;
+    uxn.ram.ptr = (uxn.ram.ptr as i16 + a as i8 as i16) as u16;
 }
 
 pub fn op_sth(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
@@ -177,7 +177,7 @@ pub fn op_mul(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
 pub fn op_div(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let mut a = src.pop8(keep);
     let b = src.pop8(keep);
-    if(a == 0) {
+    if a == 0 {
         src.error = 3;
         a = 1;
     }
@@ -217,7 +217,7 @@ pub fn op_lit16(uxn: &mut Uxn, src: &mut Stack, _dst: &mut Stack, _keep: KeepMod
 
 pub fn op_inc16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let a = src.pop16(keep);
-    src.push16(a + 1);
+    src.push16(a.wrapping_add(1));
 }
 
 pub fn op_pop16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
@@ -287,7 +287,7 @@ pub fn op_jmp16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode)
 
 pub fn op_jnz16(uxn: &mut Uxn, src: &mut Stack, dst: &mut Stack, keep: KeepMode) {
     let a = src.pop16(keep);
-    if src.pop8(keep) == 0 {
+    if src.pop8(keep) != 0 {
         uxn.ram.ptr = a;
     }
 }

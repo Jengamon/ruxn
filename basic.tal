@@ -1,2 +1,41 @@
-|0100 
-    LITk 80 LIT BRK
+%+  { ADD }  %-  { SUB } 
+%<  { LTH }  %>  { GTH }  %=  { EQU }  %!  { NEQ }
+%++ { ADD2 } %-- { SUB2 }
+%<< { LTH2 } %>> { GTH2 } %== { EQU2 } %!! { NEQ2 }
+%=~ { EQUk NIP } %!~ { NEQk NIP } 
+%<~ { LTHk NIP } %>~ { GTHk NIP } 
+%RTN { JMP2r } %SPC { #20 .Console/write DEO } %NWL { #0a .Console/write DEO }
+
+|10 @Console    &vector $2 &read $1 &pad    $5 &write $1 
+
+|0100
+
+   ( #2000 STZ #0101 STZ #0002 STZ LIT2k JMP2 03 STZ JMP2 )
+   #06 ;test #0000 ;memcpy JSR2
+
+BRK
+
+@print-hex ( value -- )
+    
+    STHk #04 SFT ,&parse JSR .Console/write DEO
+    STHr #0f AND ,&parse JSR .Console/write DEO
+    RTN
+    &parse ( value -- char )
+        DUP #09 > ,&above JCN #30 + RTN &above #09 - #60 + RTN
+
+RTN
+
+@memcpy ( len src-addr* target-addr* )
+    STH2 STH2
+
+    #00 EQUk NIP ,&loopend JCN
+
+    &loop
+        STH2r LDAk STH2r STAk 
+        INC2 STH2 POP INC2 STH2 
+        #01 - DUP ,&loop JCN
+    &loopend
+    POP2r POP2r POP
+RTN
+
+@test "Hiwoow

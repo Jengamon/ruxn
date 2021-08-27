@@ -462,5 +462,12 @@ fn main() -> anyhow::Result<()> {
     let ret = run(&mut uxn)?;
     println!("==> {} {:02x?} {:02x?}", ret, 
         &uxn.wst.data.get()[..uxn.wst.ptr.get() as usize], &uxn.rst.data.get()[..uxn.rst.ptr.get() as usize]);
+    {
+        // Dump the contents of memory to file so we can pick it apart
+        let mut memory_dump = std::fs::File::create("memory.uxndmp")?;
+        use std::io::Write;
+        memory_dump.write_all(&uxn.ram.data.get())?;
+    }
+
     Ok(())
 }

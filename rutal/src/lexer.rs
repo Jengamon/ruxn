@@ -179,12 +179,16 @@ impl OpCodeFull {
 
 impl std::fmt::Display for OpCodeFull {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}{}{}", 
-            self.op, 
-            if self.short { "2" } else { "" },
-            if self.keep { "k" } else { "" },
-            if self.ret { "r" } else { "" }
-        )
+        if self.op == OpCode::Break && (self.short || self.ret || self.keep) == false {
+            write!(f, "BRK")
+        } else {
+            write!(f, "{}{}{}{}", 
+                self.op, 
+                if self.short { "2" } else { "" },
+                if self.keep { "k" } else { "" },
+                if self.ret { "r" } else { "" }
+            )
+        }
     }
 }
 

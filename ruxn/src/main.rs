@@ -460,6 +460,7 @@ fn main() -> anyhow::Result<()> {
     uxn.dev[0].install("system", devices::system_talk);
     uxn.dev[1].install("console", devices::console_talk);
     let ret = run(&mut uxn)?;
-    println!("==> {}", ret);
+    println!("==> {} {:02x?} {:02x?}", ret, 
+        &uxn.wst.data.get()[..uxn.wst.ptr.get() as usize], &uxn.rst.data.get()[..uxn.rst.ptr.get() as usize]);
     Ok(())
 }

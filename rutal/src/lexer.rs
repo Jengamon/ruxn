@@ -83,7 +83,7 @@ impl OpCode {
 impl std::fmt::Display for OpCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let code = match self {
-            OpCode::Break         => "BRK",
+            OpCode::Break         => "LIT",
             OpCode::Increment     => "INC",
             OpCode::Pop           => "POP",
             OpCode::Duplicate     => "DUP",
